@@ -37,15 +37,15 @@
 /* BUTTON
  *------------------------------------------------------------------*/
 #define BUTTONS_NUMBER 5
-#define BUTTON_1 (2)
-#define BUTTON_2 (3) 
+#define BUTTON_1 (2) // up
+#define BUTTON_2 (3) // center
 #define BUTTON_3 (4)
 #define BUTTON_4 (5)
 #define BUTTON_5 (6)
 #define BUTTON_PULL NRF_GPIO_PIN_PULLUP 
 
 /// This is VUSB_EN, we need it forced high to power VBUS_nRF (hw bug)
-#define FORCE_HIGH 21
+// #define FORCE_HIGH 21
 
 //--------------------------------------------------------------------+
 // BLE OTA

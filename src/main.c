@@ -337,8 +337,9 @@ static uint32_t softdev_init(bool init_softdevice)
   varclr(&blecfg);
   blecfg.gap_cfg.role_count_cfg.adv_set_count = 1;
   blecfg.gap_cfg.role_count_cfg.periph_role_count  = 1;
-  blecfg.gap_cfg.role_count_cfg.central_role_count = 0;
-  blecfg.gap_cfg.role_count_cfg.central_sec_count  = 0;
+  // We already cleared blecfg, and we want this code to work with centralless softdevices
+  //blecfg.gap_cfg.role_count_cfg.central_role_count = 0;
+  //blecfg.gap_cfg.role_count_cfg.central_sec_count  = 0;
   APP_ERROR_CHECK( sd_ble_cfg_set(BLE_GAP_CFG_ROLE_COUNT, &blecfg, ram_start) );
 
   // NRF_DFU_BLE_REQUIRES_BONDS
