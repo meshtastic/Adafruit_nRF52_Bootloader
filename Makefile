@@ -13,7 +13,7 @@ TUSB_PATH    = lib/tinyusb/src
 NRFX_PATH    = lib/nrfx
 SD_PATH      = lib/softdevice/$(SD_FILENAME)
 
-SD_VERSION   = 6.1.1
+SD_VERSION   = 7.2.0
 SD_FILENAME  = $(SD_NAME)_nrf52_$(SD_VERSION)
 SD_HEX       = $(SD_PATH)/$(SD_FILENAME)_softdevice.hex
 
@@ -77,9 +77,9 @@ ifeq ($(MCU_SUB_VARIANT),nrf52)
   DFU_DEV_REV = 0xADAF
   CFLAGS += -DNRF52 -DNRF52832_XXAA -DS132
 else ifeq ($(MCU_SUB_VARIANT),nrf52833)
-  SD_NAME = s140
+  SD_NAME = s113
   DFU_DEV_REV = 52840
-  CFLAGS += -DNRF52833_XXAA -DS140
+  CFLAGS += -DNRF52833_XXAA -DS113
 else ifeq ($(MCU_SUB_VARIANT),nrf52840)
   SD_NAME = s140
   DFU_DEV_REV = 52840
