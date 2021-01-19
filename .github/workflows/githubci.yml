@@ -11,10 +11,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - name: Setup Python
-      uses: actions/setup-python@v1
+      uses: actions/setup-python@v2
+      with:
+        # 3.9 has issue with intelhex https://github.com/python-intelhex/intelhex/issues/45
+        python-version: '3.8'
 
     - name: Setup Node.js
-      uses: actions/setup-node@v1.1.0
+      uses: actions/setup-node@v1
       
     - name: Checkout Code
       uses: actions/checkout@v1
@@ -25,8 +28,10 @@ jobs:
       run: |
         pip3 install adafruit-nrfutil uritemplate requests intelhex
         npm install --global xpm
-        xpm install --global @xpack-dev-tools/arm-none-eabi-gcc@latest
-        echo "::add-path::`echo $HOME/opt/xPacks/@xpack-dev-tools/arm-none-eabi-gcc/*/.content/bin`"
+        # 9.3.1-1.2.1 is xpack modified version which significantly increased compiled size to 6-7KB and cause flash overflow.
+        # Skip this version for now, we will try again with next official release from ARM
+        xpm install --global @xpack-dev-tools/arm-none-eabi-gcc@9.3.1-1.1.1
+        echo `echo $HOME/opt/xPacks/@xpack-dev-tools/arm-none-eabi-gcc/*/.content/bin` >> $GITHUB_PATH
     
     - name: Build
       run: python3 tools/build_all.py

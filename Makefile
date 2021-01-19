@@ -7,6 +7,8 @@
 # - SD_HEX     : to bootloader hex binary
 #------------------------------------------------------------------------------
 
+-include Makefile.user
+
 SDK_PATH     = lib/sdk/components
 SDK11_PATH   = lib/sdk11/components
 TUSB_PATH    = lib/tinyusb/src
@@ -22,8 +24,8 @@ MBR_HEX			 = lib/softdevice/mbr/hex/mbr_nrf52_2.4.1_mbr.hex
 # linker by MCU eg. nrf52840.ld
 LD_FILE      = linker/$(MCU_SUB_VARIANT).ld
 
-GIT_VERSION = $(shell git describe --dirty --always --tags)
-GIT_SUBMODULE_VERSIONS = $(shell git submodule status | cut -d' ' -f3,4 | paste -s -d" " -)
+GIT_VERSION := $(shell git describe --dirty --always --tags)
+GIT_SUBMODULE_VERSIONS := $(shell git submodule status | cut -d" " -f3,4 | paste -s -d" " -)
 
 # compiled file name
 OUT_FILE = $(BOARD)_bootloader-$(GIT_VERSION)
@@ -44,10 +46,33 @@ OBJCOPY = $(CROSS_COMPILE)objcopy
 SIZE    = $(CROSS_COMPILE)size
 GDB     = $(CROSS_COMPILE)gdb
 
+# Flasher utility options
 NRFUTIL = adafruit-nrfutil
 NRFJPROG = nrfjprog
+FLASHER ?= nrfjprog
+PYOCD ?= pyocd
 
-MK = mkdir -p
+# Flasher will default to nrfjprog,
+# Check for pyocd, error on unexpected value.
+ifeq ($(FLASHER),nrfjprog)
+  FLASH_CMD = $(NRFJPROG) --program $1 --sectoranduicrerase -f nrf52 --reset
+  FLASH_NOUICR_CMD = $(NRFJPROG) --program $1 -f nrf52 --sectorerase --reset
+  FLASH_ERASE_CMD = $(NRFJPROG) -f nrf52 --eraseall
+else ifeq ($(FLASHER),pyocd)
+  FLASH_CMD = $(PYOCD) flash -t $(MCU_SUB_VARIANT) $1
+  FLASH_NOUICR_CMD = $(PYOCD) flash -t $(MCU_SUB_VARIANT) $1
+  FLASH_ERASE_CMD = $(PYOCD) erase -t $(MCU_SUB_VARIANT) --chip
+else
+  $(error Unsupported flash utility: "$(FLASHER)")
+endif
+
+# Set make directory command, Windows tries to create a directory named "-p" if that flag is there.
+ifneq ($(OS), Windows_NT)
+  MK = mkdir -p
+else
+  MK = mkdir
+endif
+
 RM = rm -rf
 
 # auto-detect BMP on macOS, otherwise have to specify
@@ -57,7 +82,8 @@ GDB_BMP = $(GDB) -ex 'target extended-remote $(BMP_PORT)' -ex 'monitor swdp_scan
 #---------------------------------
 # Select the board to build
 #---------------------------------
-BOARD_LIST = $(sort $(subst src/boards/,,$(wildcard src/boards/*)))
+# Note: whitespace is not allowed in the filenames... it WILL break this part of the script
+BOARD_LIST = $(sort $(filter-out boards.h boards.c,$(notdir $(wildcard src/boards/*))))
 
 ifeq ($(filter $(BOARD),$(BOARD_LIST)),)
   $(info You must provide a BOARD parameter with 'BOARD='. Supported boards are:)
@@ -208,7 +234,7 @@ IPATH += $(SD_PATH)/$(SD_FILENAME)_API/include/nrf52
 ifeq ($(DEBUG), 1)
 	RTT_SRC = lib/SEGGER_RTT
 	
-	CFLAGS += -ggdb -DCFG_DEBUG -DSEGGER_RTT_MODE_DEFAULT=SEGGER_RTT_MODE_NO_BLOCK_TRIM
+	CFLAGS += -DCFG_DEBUG -DSEGGER_RTT_MODE_DEFAULT=SEGGER_RTT_MODE_BLOCK_IF_FIFO_FULL
 	IPATH += $(RTT_SRC)/RTT
   C_SRC += $(RTT_SRC)/RTT/SEGGER_RTT.c
 endif
@@ -239,7 +265,8 @@ CFLAGS += \
 	-Wsign-compare \
 	-Wmissing-format-attribute \
 	-Wno-endif-labels \
-	-Wunreachable-code	
+	-Wunreachable-code \
+	-ggdb
 
 # Suppress warning caused by SDK
 CFLAGS += -Wno-unused-parameter -Wno-expansion-to-defined
@@ -252,7 +279,12 @@ CFLAGS += -D__HEAP_SIZE=0
 
 # We don't want this on all boards
 CFLAGS += -DCONFIG_GPIO_AS_PINRESET
-CFLAGS += -DCONFIG_NFCT_PINS_AS_GPIOS
+
+# Skip defining CONFIG_NFCT_PINS_AS_GPIOS if the device uses the NFCT.
+ifneq ($(USE_NFCT),yes)
+  CFLAGS += -DCONFIG_NFCT_PINS_AS_GPIOS
+endif
+
 CFLAGS += -DSOFTDEVICE_PRESENT
 CFLAGS += -DDFU_APP_DATA_RESERVED=7*4096
 
@@ -279,7 +311,6 @@ LIBS += -lm -lc
 #------------------------------------------------------------------------------
 ASFLAGS += $(CFLAGS)
 
-
 #function for removing duplicates in a list
 remduplicates = $(strip $(if $1,$(firstword $1) $(call remduplicates,$(filter-out $(firstword $1),$1))))
 
@@ -302,26 +333,21 @@ INC_PATHS = $(addprefix -I,$(IPATH))
 # BUILD TARGETS
 #------------------------------------------------------------------------------
 
-# Verbose mode (V=). 0: default, 1: print out CFLAG, LDFLAG 2: print all compile command
-ifeq ("$(V)","1")
-$(info CFLAGS   $(CFLAGS))
-$(info )
-$(info LDFLAGS  $(LDFLAGS))
-$(info )
-$(info ASFLAGS $(ASFLAGS))
-$(info )
-endif
-
 .PHONY: all clean flash dfu-flash sd gdbflash gdb
 
 # default target to build
 all: $(BUILD)/$(OUT_FILE).out $(BUILD)/$(OUT_FILE)-nosd.hex $(BUILD)/$(OUT_FILE)-nosd.uf2 $(BUILD)/$(MERGED_FILE).hex $(BUILD)/$(MERGED_FILE).zip
 
+# Print out the value of a make variable.
+# https://stackoverflow.com/questions/16467718/how-to-print-out-a-variable-in-makefile
+print-%:
+	@echo $* = $($*)
+
 #------------------- Compile rules -------------------
 
 # Create build directories
 $(BUILD):
-	@$(MK) $@
+	@$(MK) "$@"
 
 clean:
 	@$(RM) $(BUILD)
@@ -380,26 +406,30 @@ __check_defined = \
 # Flash the compiled
 flash: $(BUILD)/$(OUT_FILE)-nosd.hex
 	@echo Flashing: $(notdir $<)
-	$(NRFJPROG) --program $< --sectoranduicrerase -f nrf52 --reset
+	$(call FLASH_CMD,$<)
+
+erase:
+	@echo Erasing flash
+	$(call FLASH_ERASE_CMD)
+
+# flash SD only
+sd:
+	@echo Flashing: $(SD_HEX)
+	$(call FLASH_NOUICR_CMD,$(SD_HEX))
+
+# flash MBR only
+mbr:
+	@echo Flashing: $(MBR_HEX)
+	$(call FLASH_NOUICR_CMD,$(MBR_HEX))
+
+#------------------- Flash with NRFUTIL via DFU -------------------
 
 # dfu using CDC interface
 dfu-flash: $(BUILD)/$(MERGED_FILE).zip
 	@:$(call check_defined, SERIAL, example: SERIAL=/dev/ttyACM0)
 	$(NRFUTIL) --verbose dfu serial --package $< -p $(SERIAL) -b 115200 --singlebank --touch 1200
 
-erase:
-	@echo Erasing flash
-	$(NRFJPROG) -f nrf52 --eraseall
-
-# flash SD only
-sd:
-	@echo Flashing: $(SD_HEX)
-	$(NRFJPROG) --program $(SD_HEX) -f nrf52 --sectorerase --reset
-
-# flash MBR only
-mbr:
-	@echo Flashing: $(MBR_HEX)
-	$(NRFJPROG) --program $(MBR_HEX) -f nrf52 --sectorerase --reset
+#------------------- Debugging -------------------
 
 gdbflash: $(BUILD)/$(MERGED_FILE).hex
 	@echo Flashing: $<
